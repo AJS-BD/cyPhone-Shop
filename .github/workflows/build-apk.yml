@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build debug APK
+    name: Build release APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -25,13 +25,40 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Prebuild Android project
-        run: CI=1 npx expo prebuild --platform android
-      - name: Build debug APK
+        run: CI=1 npx expo prebuild --clean --platform android
+      - name: Ensure debug keystore exists
+        run: |
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            mkdir -p "$HOME/.android"
+            keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Debug, O=Android, C=US"
+          fi
+          keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android | grep "SHA1" | head -1 || true
+      - name: Build release APK
         run: |
           cd android
-          ./gradlew assembleDebug
-      - name: Upload APK
+          ./gradlew assembleRelease -Pandroid.injected.signing.store.file=$HOME/.android/debug.keystore -Pandroid.injected.signing.store.password=android -Pandroid.injected.signing.key.alias=androiddebugkey -Pandroid.injected.signing.key.password=android
+      - name: Verify JS bundle in APK
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$APK" ]; then
+            echo "::error::APK not found: $APK"
+            exit 1
+          fi
+          ls -lh "$APK"
+          unzip -l "$APK" | grep "assets/" || true
+          if ! unzip -l "$APK" | grep -q "assets/index.android.bundle"; then
+            echo "::error::assets/index.android.bundle is missing from the APK - the APK would need Metro to run"
+            exit 1
+          fi
+          SIZE=$(unzip -p "$APK" assets/index.android.bundle | wc -c)
+          echo "index.android.bundle uncompressed size: ${SIZE} bytes"
+          if [ "$SIZE" -le 1000000 ]; then
+            echo "::error::index.android.bundle too small: ${SIZE} bytes (expected more than 1000000 bytes)"
+            exit 1
+          fi
+          echo "BUNDLE CHECK PASSED: index.android.bundle = ${SIZE} bytes"
+      - name: Upload release APK
         uses: actions/upload-artifact@v5
         with:
-          name: cyphone-shop-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: cyphone-shop-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
