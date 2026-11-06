@@ -2,6 +2,7 @@ import { useState } from "react";
 import { SafeAreaView, ScrollView, StyleSheet } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { COLORS, TerminalWindow } from "./src/components/Terminal";
+import { ScreenTransition } from "./src/components/Motion";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { QueryScreen } from "./src/screens/QueryScreen";
 import { DetailsScreen } from "./src/screens/DetailsScreen";
@@ -16,21 +17,23 @@ export default function App() {
       <StatusBar style="light" />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <TerminalWindow title="cyphone@shop:~">
-          {screen === "home" ? <HomeScreen onStart={() => setScreen("query")} /> : null}
-          {screen === "query" ? (
-            <QueryScreen
-              value={query}
-              onChange={setQuery}
-              onNext={(name) => {
-                setQuery(name);
-                setScreen("details");
-              }}
-              onBack={() => setScreen("home")}
-            />
-          ) : null}
-          {screen === "details" ? (
-            <DetailsScreen name={query} onSearchAgain={() => setScreen("query")} onHome={() => setScreen("home")} />
-          ) : null}
+          <ScreenTransition key={screen}>
+            {screen === "home" ? <HomeScreen onStart={() => setScreen("query")} /> : null}
+            {screen === "query" ? (
+              <QueryScreen
+                value={query}
+                onChange={setQuery}
+                onNext={(name) => {
+                  setQuery(name);
+                  setScreen("details");
+                }}
+                onBack={() => setScreen("home")}
+              />
+            ) : null}
+            {screen === "details" ? (
+              <DetailsScreen name={query} onSearchAgain={() => setScreen("query")} onHome={() => setScreen("home")} />
+            ) : null}
+          </ScreenTransition>
         </TerminalWindow>
       </ScrollView>
     </SafeAreaView>
