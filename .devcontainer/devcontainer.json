@@ -10,10 +10,22 @@
       ]
     }
   },
-  "forwardPorts": [3000],
+  "forwardPorts": [
+    3000,
+    8081,
+    19000
+  ],
   "portsAttributes": {
     "3000": {
       "label": "App",
+      "onAutoForward": "notify"
+    },
+    "8081": {
+      "label": "Metro",
+      "onAutoForward": "notify"
+    },
+    "19000": {
+      "label": "Expo",
       "onAutoForward": "notify"
     }
   }
