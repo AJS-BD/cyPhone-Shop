@@ -1,16 +1,49 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { COLORS, SectionBox, T, TermButton } from "../components/Terminal";
 import { FadeSlideIn, GlitchView, HackerProgressBar, ScrambleText, TypingText } from "../components/Motion";
 import { findPhone, resolvePhone } from "../data/phones";
+import type { Phone } from "../data/phones";
+import { fetchLiveSpecs } from "../lib/phoneApi";
 
 type LoadPhase = "typing" | "bar" | "ready";
 
 export function DetailsScreen(props: { name: string; onSearchAgain: () => void; onHome: () => void }) {
   const [phase, setPhase] = useState<LoadPhase>("typing");
   const [fetchTyped, setFetchTyped] = useState(false);
-  const phone = useMemo(() => resolvePhone(props.name), [props.name]);
+  const [barDone, setBarDone] = useState(false);
+  const [liveChecked, setLiveChecked] = useState(false);
+  const [livePhone, setLivePhone] = useState<Phone | null>(null);
+  const offlinePhone = useMemo(() => resolvePhone(props.name), [props.name]);
   const found = findPhone(props.name) !== null;
+
+  // Live specs first: try the GSMArena-backed Edge Function. On any error or
+  // timeout (or when no function URL is configured) fall back to the local
+  // database, and the screen says so. Reviews stay local sample data.
+  useEffect(() => {
+    let alive = true;
+    fetchLiveSpecs(props.name)
+      .then((phone) => {
+        if (!alive) return;
+        if (phone) setLivePhone(phone);
+        setLiveChecked(true);
+      })
+      .catch(() => {
+        if (alive) setLiveChecked(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [props.name]);
+
+  // The loading animation runs first; the screen opens once the bar has
+  // finished and the live lookup has settled (at most its 10s timeout).
+  useEffect(() => {
+    if (barDone && liveChecked) setPhase("ready");
+  }, [barDone, liveChecked]);
+
+  const phone = livePhone ?? offlinePhone;
+  const live = livePhone !== null;
   const specRows = [
     { label: "RAM", value: phone.specs.ram },
     { label: "ROM / STORAGE", value: phone.specs.storage },
@@ -24,18 +57,18 @@ export function DetailsScreen(props: { name: string; onSearchAgain: () => void; 
     return (
       <View>
         {phase === "typing" ? (
-          <TypingText text="> QUERYING DATABASE..." style={T.line} speed={20} onDone={() => setFetchTyped(true)} />
+          <TypingText text="> FETCHING LIVE SPECS..." style={T.line} speed={20} onDone={() => setFetchTyped(true)} />
         ) : (
-          <Text style={T.line}>{"> QUERYING DATABASE..."}</Text>
+          <Text style={T.line}>{"> FETCHING LIVE SPECS..."}</Text>
         )}
         {phase === "typing" && fetchTyped ? (
-          <TypingText text={"> FETCHING SPECS FOR " + props.name.toUpperCase() + "..."} style={[T.line, { marginTop: 8 }]} speed={18} onDone={() => setPhase("bar")} />
+          <TypingText text={"> FETCHING LIVE SPECS FOR " + props.name.toUpperCase() + "..."} style={[T.line, { marginTop: 8 }]} speed={10} onDone={() => setPhase("bar")} />
         ) : null}
         {phase === "bar" ? (
-          <Text style={[T.line, { marginTop: 8 }]}>{"> FETCHING SPECS FOR " + props.name.toUpperCase() + "..."}</Text>
+          <Text style={[T.line, { marginTop: 8 }]}>{"> FETCHING LIVE SPECS FOR " + props.name.toUpperCase() + "..."}</Text>
         ) : null}
         {phase === "bar" ? (
-          <HackerProgressBar duration={900} onDone={() => setPhase("ready")} style={{ marginTop: 16 }} />
+          <HackerProgressBar duration={900} onDone={() => setBarDone(true)} style={{ marginTop: 16 }} />
         ) : null}
         <Text style={[T.dimLine, { marginTop: 16 }]}>{"> [ SYSTEM ] please wait_"}</Text>
       </View>
@@ -47,8 +80,13 @@ export function DetailsScreen(props: { name: string; onSearchAgain: () => void; 
         <ScrambleText text={phone.name.toUpperCase()} style={[T.line, { color: COLORS.cyan, fontSize: 26, fontWeight: "bold" }]} duration={800} />
       </GlitchView>
       <FadeSlideIn delay={200}>
-        <Text style={[T.dimLine, { marginTop: 6 }]}>{"> DATABASE MATCH: " + (found ? "FOUND" : "NOT IN DATABASE")}</Text>
+        <Text style={[T.dimLine, { marginTop: 6 }]}>{"> SOURCE: " + (live ? "[ LIVE \u2022 GSMArena ]" : "[ OFFLINE \u2022 LOCAL DB ]")}</Text>
       </FadeSlideIn>
+      {live ? null : (
+        <FadeSlideIn delay={260}>
+          <Text style={[T.dimLine, { marginTop: 4 }]}>{"> DATABASE MATCH: " + (found ? "FOUND" : "NOT IN DATABASE")}</Text>
+        </FadeSlideIn>
+      )}
       <FadeSlideIn delay={300}>
         <SectionBox title="DESCRIPTION">
           {phone.description.map((line, i) => (
@@ -73,9 +111,9 @@ export function DetailsScreen(props: { name: string; onSearchAgain: () => void; 
           {phone.reviews.map((review, i) => (
             <FadeSlideIn key={review.text} delay={1280 + i * 120}>
               <View style={{ marginTop: 12 }}>
-                <Text style={[T.line, { color: COLORS.amber }]}>{ "★".repeat(review.stars) + "☆".repeat(5 - review.stars) }</Text>
+                <Text style={[T.line, { color: COLORS.amber }]}>{"\u2605".repeat(review.stars) + "\u2606".repeat(5 - review.stars)}</Text>
                 <Text style={[T.line, { marginTop: 4 }]}>{"> " + review.text}</Text>
-                <Text style={T.dimLine}>{ "— " + review.source }</Text>
+                <Text style={T.dimLine}>{"\u2014 " + review.source}</Text>
               </View>
             </FadeSlideIn>
           ))}

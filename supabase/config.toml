@@ -1,0 +1,40 @@
+# Supabase project config - cyPhone-Shop live specs (specs only, no reviews).
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+port = 9999
+site_url = "http://localhost:3000"
+enable_signup = true
+enable_confirmations = false
+
+[edge_runtime]
+enabled = true
+policy = "per_worker"
+inspector_port = 8083
+
+# The live specs function is public (no JWT) - it only reads public GSMArena
+# pages and the cache table. No secrets are stored in this repo.
+[functions.phone-specs]
+verify_jwt = false
